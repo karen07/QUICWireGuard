@@ -1,6 +1,6 @@
-diff -ur wireguard/Makefile wireguard_new/Makefile
+diff -ur wireguard/Makefile wireguard/Makefile
 --- wireguard/Makefile	2024-11-07 22:01:22.711378653 +0000
-+++ wireguard_new/Makefile	2024-11-07 22:01:06.264300414 +0000
++++ wireguard/Makefile	2024-11-07 22:01:06.264300414 +0000
 @@ -15,3 +15,9 @@
  wireguard-y += cookie.o
  wireguard-y += netlink.o
@@ -11,9 +11,9 @@ diff -ur wireguard/Makefile wireguard_new/Makefile
 +
 +clean:
 +	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
-diff -ur wireguard/main.c wireguard_new/main.c
+diff -ur wireguard/main.c wireguard/main.c
 --- wireguard/main.c	2024-11-07 22:01:22.711378653 +0000
-+++ wireguard_new/main.c	2024-11-07 22:01:06.265300419 +0000
++++ wireguard/main.c	2024-11-07 22:01:06.265300419 +0000
 @@ -45,7 +45,7 @@
  	if (ret < 0)
  		goto err_netlink;
@@ -23,9 +23,9 @@ diff -ur wireguard/main.c wireguard_new/main.c
  	pr_info("Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n");
  
  	return 0;
-diff -ur wireguard/queueing.h wireguard_new/queueing.h
+diff -ur wireguard/queueing.h wireguard/queueing.h
 --- wireguard/queueing.h	2024-11-07 22:01:22.712378658 +0000
-+++ wireguard_new/queueing.h	2024-11-07 22:01:06.265300419 +0000
++++ wireguard/queueing.h	2024-11-07 22:01:06.265300419 +0000
 @@ -38,7 +38,7 @@
  /* send.c APIs: */
  void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
@@ -35,9 +35,9 @@ diff -ur wireguard/queueing.h wireguard_new/queueing.h
  void wg_packet_send_handshake_cookie(struct wg_device *wg,
  				     struct sk_buff *initiating_skb,
  				     __le32 sender_index);
-diff -ur wireguard/receive.c wireguard_new/receive.c
+diff -ur wireguard/receive.c wireguard/receive.c
 --- wireguard/receive.c	2024-11-07 22:01:22.712378658 +0000
-+++ wireguard_new/receive.c	2024-11-07 22:01:06.265300419 +0000
++++ wireguard/receive.c	2024-11-07 22:01:06.265300419 +0000
 @@ -69,8 +69,18 @@
  		 * its size.
  		 */
@@ -68,9 +68,9 @@ diff -ur wireguard/receive.c wireguard_new/receive.c
  		break;
  	}
  	case cpu_to_le32(MESSAGE_HANDSHAKE_RESPONSE): {
-diff -ur wireguard/send.c wireguard_new/send.c
+diff -ur wireguard/send.c wireguard/send.c
 --- wireguard/send.c	2024-11-07 22:01:22.712378658 +0000
-+++ wireguard_new/send.c	2024-11-07 22:01:06.279300485 +0000
++++ wireguard/send.c	2024-11-07 22:01:06.279300485 +0000
 @@ -21,6 +21,26 @@
  static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
  {
