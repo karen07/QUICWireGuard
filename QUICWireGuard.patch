@@ -1,0 +1,169 @@
+diff -ur wireguard/Makefile wireguard_new/Makefile
+--- wireguard/Makefile	2024-11-07 22:01:22.711378653 +0000
++++ wireguard_new/Makefile	2024-11-07 22:01:06.264300414 +0000
+@@ -15,3 +15,9 @@
+ wireguard-y += cookie.o
+ wireguard-y += netlink.o
+ obj-$(CONFIG_WIREGUARD) := wireguard.o
++
++all:
++	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
++
++clean:
++	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+diff -ur wireguard/main.c wireguard_new/main.c
+--- wireguard/main.c	2024-11-07 22:01:22.711378653 +0000
++++ wireguard_new/main.c	2024-11-07 22:01:06.265300419 +0000
+@@ -45,7 +45,7 @@
+ 	if (ret < 0)
+ 		goto err_netlink;
+ 
+-	pr_info("WireGuard " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
++	pr_info("WireGuard Karen " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
+ 	pr_info("Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n");
+ 
+ 	return 0;
+diff -ur wireguard/queueing.h wireguard_new/queueing.h
+--- wireguard/queueing.h	2024-11-07 22:01:22.712378658 +0000
++++ wireguard_new/queueing.h	2024-11-07 22:01:06.265300419 +0000
+@@ -38,7 +38,7 @@
+ /* send.c APIs: */
+ void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
+ 						bool is_retry);
+-void wg_packet_send_handshake_response(struct wg_peer *peer);
++void wg_packet_send_handshake_response(struct wg_device *wg, struct wg_peer *peer);
+ void wg_packet_send_handshake_cookie(struct wg_device *wg,
+ 				     struct sk_buff *initiating_skb,
+ 				     __le32 sender_index);
+diff -ur wireguard/receive.c wireguard_new/receive.c
+--- wireguard/receive.c	2024-11-07 22:01:22.712378658 +0000
++++ wireguard_new/receive.c	2024-11-07 22:01:06.265300419 +0000
+@@ -69,8 +69,18 @@
+ 		 * its size.
+ 		 */
+ 		return -EINVAL;
+-	data_len -= sizeof(struct udphdr);
+-	data_offset = (u8 *)udp + sizeof(struct udphdr) - skb->data;
++	if ((be16_to_cpu(udp->source) == 443) || (be16_to_cpu(udp->dest) == 443)) {
++		if (*((u8 *)udp + sizeof(struct udphdr)) > 4) {
++			data_len -= sizeof(struct udphdr) + 18;
++			data_offset = (u8 *)udp + sizeof(struct udphdr) - skb->data + 18;
++		} else {
++			data_len -= sizeof(struct udphdr);
++			data_offset = (u8 *)udp + sizeof(struct udphdr) - skb->data;
++		}
++	} else {
++		data_len -= sizeof(struct udphdr);
++		data_offset = (u8 *)udp + sizeof(struct udphdr) - skb->data;
++	}
+ 	if (unlikely(!pskb_may_pull(skb,
+ 				data_offset + sizeof(struct message_header)) ||
+ 		     pskb_trim(skb, data_len + data_offset) < 0))
+@@ -151,7 +161,7 @@
+ 		net_dbg_ratelimited("%s: Receiving handshake initiation from peer %llu (%pISpfsc)\n",
+ 				    wg->dev->name, peer->internal_id,
+ 				    &peer->endpoint.addr);
+-		wg_packet_send_handshake_response(peer);
++		wg_packet_send_handshake_response(wg, peer);
+ 		break;
+ 	}
+ 	case cpu_to_le32(MESSAGE_HANDSHAKE_RESPONSE): {
+diff -ur wireguard/send.c wireguard_new/send.c
+--- wireguard/send.c	2024-11-07 22:01:22.712378658 +0000
++++ wireguard_new/send.c	2024-11-07 22:01:06.279300485 +0000
+@@ -21,6 +21,26 @@
+ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
+ {
+ 	struct message_handshake_initiation packet;
++	char send_memory[sizeof(packet) + 18];
++
++	if (be16_to_cpu(peer->endpoint.addr4.sin_port) == 443) {
++		send_memory[0] = 0xCA;
++
++		send_memory[1] = 0x00;
++		send_memory[2] = 0x00;
++		send_memory[3] = 0x00;
++		send_memory[4] = 0x01;
++
++		send_memory[5] = 0x08;
++		get_random_bytes(send_memory + 6, 8);
++
++		send_memory[14] = 0x00;
++
++		send_memory[15] = 0x00;
++
++		send_memory[16] = 0x40;
++		send_memory[17] = sizeof(packet) + 1;
++	}
+ 
+ 	if (!wg_birthdate_has_expired(atomic64_read(&peer->last_sent_handshake),
+ 				      REKEY_TIMEOUT))
+@@ -37,8 +57,16 @@
+ 		wg_timers_any_authenticated_packet_sent(peer);
+ 		atomic64_set(&peer->last_sent_handshake,
+ 			     ktime_get_coarse_boottime_ns());
+-		wg_socket_send_buffer_to_peer(peer, &packet, sizeof(packet),
++
++		if (be16_to_cpu(peer->endpoint.addr4.sin_port) == 443) {
++			memcpy(send_memory + 18, &packet, sizeof(packet));
++
++			wg_socket_send_buffer_to_peer(peer, &send_memory, sizeof(send_memory),
++							HANDSHAKE_DSCP);
++		} else {
++			wg_socket_send_buffer_to_peer(peer, &packet, sizeof(packet),
+ 					      HANDSHAKE_DSCP);
++		}
+ 		wg_timers_handshake_initiated(peer);
+ 	}
+ }
+@@ -82,9 +110,29 @@
+ 	rcu_read_unlock_bh();
+ }
+ 
+-void wg_packet_send_handshake_response(struct wg_peer *peer)
++void wg_packet_send_handshake_response(struct wg_device *wg, struct wg_peer *peer)
+ {
+ 	struct message_handshake_response packet;
++	char send_memory[sizeof(packet) + 18];
++
++	if (wg->incoming_port == 443) {
++		send_memory[0] = 0xCA;
++
++		send_memory[1] = 0x00;
++		send_memory[2] = 0x00;
++		send_memory[3] = 0x00;
++		send_memory[4] = 0x01;
++
++		send_memory[5] = 0x00;
++
++		send_memory[6] = 0x08;
++		get_random_bytes(send_memory + 7, 8);
++
++		send_memory[15] = 0x00;
++
++		send_memory[16] = 0x40;
++		send_memory[17] = sizeof(packet) + 1;
++	}
+ 
+ 	atomic64_set(&peer->last_sent_handshake, ktime_get_coarse_boottime_ns());
+ 	net_dbg_ratelimited("%s: Sending handshake response to peer %llu (%pISpfsc)\n",
+@@ -100,9 +148,18 @@
+ 			wg_timers_any_authenticated_packet_sent(peer);
+ 			atomic64_set(&peer->last_sent_handshake,
+ 				     ktime_get_coarse_boottime_ns());
+-			wg_socket_send_buffer_to_peer(peer, &packet,
++
++			if (wg->incoming_port == 443) {
++				memcpy(send_memory + 18, &packet, sizeof(packet));
++
++				wg_socket_send_buffer_to_peer(peer, &send_memory,
++								sizeof(send_memory),
++								HANDSHAKE_DSCP);
++			} else {
++				wg_socket_send_buffer_to_peer(peer, &packet,
+ 						      sizeof(packet),
+ 						      HANDSHAKE_DSCP);
++			}
+ 		}
+ 	}
+ }
