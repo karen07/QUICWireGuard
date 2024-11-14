@@ -63,4 +63,5 @@ make -j$(nproc) target/linux/compile
 
 if [ -f $WIREGUARD_FOLDER/wireguard.ko ]; then
 	scp -O $WIREGUARD_FOLDER/wireguard.ko $ROUTER_NAME:/lib/modules/$ROUTER_KERNEL/
+	echo "Command succeeded"
 fi
