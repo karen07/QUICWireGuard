@@ -1,5 +1,7 @@
 #!/bin/sh
 
+pwd_var=$(pwd)
+
 if [ -z "$1" ]; then
 	echo "Argument 1: Empty router ssh name"
 	exit 1
@@ -26,11 +28,11 @@ VERSION=$(echo "$ROUTER_OS_RELEASE" | grep VERSION | head -n 1 | sed -r 's/.*"([
 BOARD=$(echo "$ROUTER_OS_RELEASE" | grep OPENWRT_BOARD | head -n 1 | sed -r 's/.*"([^"]+).*/\1/g')
 CONFIGBUILDINFO_URL="https://downloads.openwrt.org/releases/$VERSION/targets/$BOARD/config.buildinfo"
 
-if [ ! -d openwrt ]; then
+if [ ! -d $pwd_var/openwrt ]; then
 	git clone https://git.openwrt.org/openwrt/openwrt.git
 fi
 
-cd openwrt
+cd $pwd_var/openwrt
 git checkout v$VERSION
 
 wget $CONFIGBUILDINFO_URL -O .config
@@ -40,15 +42,14 @@ wget $CONFIGBUILDINFO_URL -O .config
 
 make defconfig
 
+make -j$(nproc) download
 make -j$(nproc) tools/compile
 make -j$(nproc) toolchain/compile
 make -j$(nproc) target/linux/compile
 
-WIREGUARD_FOLDER=$(find . -type d | grep "/drivers/net/wireguard" | grep target | head -n 1)
+WIREGUARD_FOLDER=$(find $pwd_var/openwrt -type d | grep "/drivers/net/wireguard" | grep target | head -n 1)
 
-cp ../QUICWireGuard.patch $WIREGUARD_FOLDER
-
-PWD_BACKUP=$(pwd)
+cp $pwd_var/QUICWireGuard.patch $WIREGUARD_FOLDER/QUICWireGuard.patch
 
 cd $WIREGUARD_FOLDER
 
@@ -57,7 +58,7 @@ if [ ! -f QUICWireGuard_tmp ]; then
 	touch QUICWireGuard_tmp
 fi
 
-cd $PWD_BACKUP
+cd $pwd_var/openwrt
 
 make -j$(nproc) target/linux/compile
 
