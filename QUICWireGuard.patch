@@ -1,6 +1,18 @@
-diff -ur wireguard/Makefile wireguard/Makefile
---- wireguard/Makefile	2024-11-07 22:01:22.711378653 +0000
-+++ wireguard/Makefile	2024-11-07 22:01:06.264300414 +0000
+diff -ur wireguard/main.c QUICwireguard/main.c
+--- wireguard/main.c	2024-12-14 20:18:17.953053078 +0300
++++ QUICwireguard/main.c	2024-12-14 20:17:25.857431420 +0300
+@@ -45,7 +45,7 @@
+ 	if (ret < 0)
+ 		goto err_netlink;
+ 
+-	pr_info("WireGuard " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
++	pr_info("QUICWireGuard " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
+ 	pr_info("Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n");
+ 
+ 	return 0;
+diff -ur wireguard/Makefile QUICwireguard/Makefile
+--- wireguard/Makefile	2024-12-14 20:18:27.660145562 +0300
++++ QUICwireguard/Makefile	2024-12-14 20:17:25.857431420 +0300
 @@ -15,3 +15,9 @@
  wireguard-y += cookie.o
  wireguard-y += netlink.o
@@ -11,21 +23,9 @@ diff -ur wireguard/Makefile wireguard/Makefile
 +
 +clean:
 +	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
-diff -ur wireguard/main.c wireguard/main.c
---- wireguard/main.c	2024-11-07 22:01:22.711378653 +0000
-+++ wireguard/main.c	2024-11-07 22:01:06.265300419 +0000
-@@ -45,7 +45,7 @@
- 	if (ret < 0)
- 		goto err_netlink;
- 
--	pr_info("WireGuard " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
-+	pr_info("QUICWireGuard " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
- 	pr_info("Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n");
- 
- 	return 0;
-diff -ur wireguard/queueing.h wireguard/queueing.h
---- wireguard/queueing.h	2024-11-07 22:01:22.712378658 +0000
-+++ wireguard/queueing.h	2024-11-07 22:01:06.265300419 +0000
+diff -ur wireguard/queueing.h QUICwireguard/queueing.h
+--- wireguard/queueing.h	2024-12-14 20:18:32.120341157 +0300
++++ QUICwireguard/queueing.h	2024-12-14 20:17:25.857431420 +0300
 @@ -38,7 +38,7 @@
  /* send.c APIs: */
  void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
@@ -35,16 +35,16 @@ diff -ur wireguard/queueing.h wireguard/queueing.h
  void wg_packet_send_handshake_cookie(struct wg_device *wg,
  				     struct sk_buff *initiating_skb,
  				     __le32 sender_index);
-diff -ur wireguard/receive.c wireguard/receive.c
---- wireguard/receive.c	2024-11-07 22:01:22.712378658 +0000
-+++ wireguard/receive.c	2024-11-07 22:01:06.265300419 +0000
+diff -ur wireguard/receive.c QUICwireguard/receive.c
+--- wireguard/receive.c	2024-12-14 20:18:36.077181314 +0300
++++ QUICwireguard/receive.c	2024-12-14 20:17:25.857431420 +0300
 @@ -69,8 +69,18 @@
  		 * its size.
  		 */
  		return -EINVAL;
 -	data_len -= sizeof(struct udphdr);
 -	data_offset = (u8 *)udp + sizeof(struct udphdr) - skb->data;
-+	if ((be16_to_cpu(udp->source) == 443) || (be16_to_cpu(udp->dest) == 443)) {
++	if ((be16_to_cpu(udp->source) == QUIC_PORT) || (be16_to_cpu(udp->dest) == QUIC_PORT)) {
 +		if (*((u8 *)udp + sizeof(struct udphdr)) > 4) {
 +			data_len -= sizeof(struct udphdr) + 18;
 +			data_offset = (u8 *)udp + sizeof(struct udphdr) - skb->data + 18;
@@ -68,16 +68,16 @@ diff -ur wireguard/receive.c wireguard/receive.c
  		break;
  	}
  	case cpu_to_le32(MESSAGE_HANDSHAKE_RESPONSE): {
-diff -ur wireguard/send.c wireguard/send.c
---- wireguard/send.c	2024-11-07 22:01:22.712378658 +0000
-+++ wireguard/send.c	2024-11-07 22:01:06.279300485 +0000
+diff -ur wireguard/send.c QUICwireguard/send.c
+--- wireguard/send.c	2024-12-14 20:18:41.307410595 +0300
++++ QUICwireguard/send.c	2024-12-14 20:17:25.857431420 +0300
 @@ -21,6 +21,26 @@
  static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
  {
  	struct message_handshake_initiation packet;
 +	char send_memory[sizeof(packet) + 18];
 +
-+	if (be16_to_cpu(peer->endpoint.addr4.sin_port) == 443) {
++	if (be16_to_cpu(peer->endpoint.addr4.sin_port) == QUIC_PORT) {
 +		send_memory[0] = 0xCA;
 +
 +		send_memory[1] = 0x00;
@@ -104,7 +104,7 @@ diff -ur wireguard/send.c wireguard/send.c
  			     ktime_get_coarse_boottime_ns());
 -		wg_socket_send_buffer_to_peer(peer, &packet, sizeof(packet),
 +
-+		if (be16_to_cpu(peer->endpoint.addr4.sin_port) == 443) {
++		if (be16_to_cpu(peer->endpoint.addr4.sin_port) == QUIC_PORT) {
 +			memcpy(send_memory + 18, &packet, sizeof(packet));
 +
 +			wg_socket_send_buffer_to_peer(peer, &send_memory, sizeof(send_memory),
@@ -126,7 +126,7 @@ diff -ur wireguard/send.c wireguard/send.c
  	struct message_handshake_response packet;
 +	char send_memory[sizeof(packet) + 18];
 +
-+	if (wg->incoming_port == 443) {
++	if (wg->incoming_port == QUIC_PORT) {
 +		send_memory[0] = 0xCA;
 +
 +		send_memory[1] = 0x00;
@@ -153,7 +153,7 @@ diff -ur wireguard/send.c wireguard/send.c
  				     ktime_get_coarse_boottime_ns());
 -			wg_socket_send_buffer_to_peer(peer, &packet,
 +
-+			if (wg->incoming_port == 443) {
++			if (wg->incoming_port == QUIC_PORT) {
 +				memcpy(send_memory + 18, &packet, sizeof(packet));
 +
 +				wg_socket_send_buffer_to_peer(peer, &send_memory,
@@ -167,3 +167,15 @@ diff -ur wireguard/send.c wireguard/send.c
  		}
  	}
  }
+diff -ur wireguard/socket.h QUICwireguard/socket.h
+--- wireguard/socket.h	2024-12-14 20:18:46.004283121 +0300
++++ QUICwireguard/socket.h	2024-12-14 20:17:25.857431420 +0300
+@@ -11,6 +11,8 @@
+ #include <linux/if_vlan.h>
+ #include <linux/if_ether.h>
+ 
++#define QUIC_PORT 443
++
+ int wg_socket_init(struct wg_device *wg, u16 port);
+ void wg_socket_reinit(struct wg_device *wg, struct sock *new4,
+ 		      struct sock *new6);
