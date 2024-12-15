@@ -1,18 +1,20 @@
 diff -ur wireguard/main.c QUICwireguard/main.c
---- wireguard/main.c	2024-12-15 17:35:26.273415848 +0300
-+++ QUICwireguard/main.c	2024-12-15 17:34:48.275069845 +0300
-@@ -45,7 +45,7 @@
+--- wireguard/main.c	2024-12-15 19:06:21.542243707 +0300
++++ QUICwireguard/main.c	2024-12-15 19:06:05.568246506 +0300
+@@ -45,8 +45,9 @@
  	if (ret < 0)
  		goto err_netlink;
  
 -	pr_info("WireGuard " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
-+	pr_info("QUICWireGuard " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
++	pr_info("QUICWireGuard " WIREGUARD_VERSION " loaded. See https://github.com/karen07/QUICWireGuard for information.\n");
  	pr_info("Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n");
++	pr_info("Copyright (C) 2024 Karen.\n");
  
  	return 0;
+ 
 diff -ur wireguard/Makefile QUICwireguard/Makefile
---- wireguard/Makefile	2024-12-15 17:35:22.586586632 +0300
-+++ QUICwireguard/Makefile	2024-12-15 17:34:48.275069845 +0300
+--- wireguard/Makefile	2024-12-15 19:06:21.542243707 +0300
++++ QUICwireguard/Makefile	2024-12-15 19:06:05.568246506 +0300
 @@ -15,3 +15,9 @@
  wireguard-y += cookie.o
  wireguard-y += netlink.o
@@ -24,8 +26,8 @@ diff -ur wireguard/Makefile QUICwireguard/Makefile
 +clean:
 +	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 diff -ur wireguard/messages.h QUICwireguard/messages.h
---- wireguard/messages.h	2024-12-15 17:35:19.303108465 +0300
-+++ QUICwireguard/messages.h	2024-12-15 17:34:48.275069845 +0300
+--- wireguard/messages.h	2024-12-15 19:06:21.542243707 +0300
++++ QUICwireguard/messages.h	2024-12-15 19:06:05.568246506 +0300
 @@ -77,6 +77,16 @@
  	u8 mac2[COOKIE_LEN];
  };
@@ -38,7 +40,7 @@ diff -ur wireguard/messages.h QUICwireguard/messages.h
 +	u8 SCID_len;
 +	u8 token_len;
 +	__be16 data_len;
-+};
++} __attribute__((packed));
 +
  struct message_handshake_initiation {
  	struct message_header header;
@@ -55,14 +57,14 @@ diff -ur wireguard/messages.h QUICwireguard/messages.h
 +	u64 SCID;
 +	u8 token_len;
 +	__be16 data_len;
-+};
++} __attribute__((packed));
 +
  struct message_handshake_response {
  	struct message_header header;
  	__le32 sender_index;
 diff -ur wireguard/queueing.h QUICwireguard/queueing.h
---- wireguard/queueing.h	2024-12-15 17:35:17.029674808 +0300
-+++ QUICwireguard/queueing.h	2024-12-15 17:34:48.275069845 +0300
+--- wireguard/queueing.h	2024-12-15 19:06:21.542243707 +0300
++++ QUICwireguard/queueing.h	2024-12-15 19:06:05.568246506 +0300
 @@ -38,7 +38,7 @@
  /* send.c APIs: */
  void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
@@ -73,8 +75,8 @@ diff -ur wireguard/queueing.h QUICwireguard/queueing.h
  				     struct sk_buff *initiating_skb,
  				     __le32 sender_index);
 diff -ur wireguard/receive.c QUICwireguard/receive.c
---- wireguard/receive.c	2024-12-15 17:35:11.046077281 +0300
-+++ QUICwireguard/receive.c	2024-12-15 17:34:48.275069845 +0300
+--- wireguard/receive.c	2024-12-15 19:06:21.542243707 +0300
++++ QUICwireguard/receive.c	2024-12-15 19:06:05.568246506 +0300
 @@ -46,7 +46,7 @@
  
  static int prepare_skb_header(struct sk_buff *skb, struct wg_device *wg)
@@ -116,8 +118,8 @@ diff -ur wireguard/receive.c QUICwireguard/receive.c
  	}
  	case cpu_to_le32(MESSAGE_HANDSHAKE_RESPONSE): {
 diff -ur wireguard/send.c QUICwireguard/send.c
---- wireguard/send.c	2024-12-15 17:35:08.232619648 +0300
-+++ QUICwireguard/send.c	2024-12-15 17:34:48.275069845 +0300
+--- wireguard/send.c	2024-12-15 19:06:21.542243707 +0300
++++ QUICwireguard/send.c	2024-12-15 19:06:05.568246506 +0300
 @@ -20,7 +20,27 @@
  
  static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
@@ -125,7 +127,7 @@ diff -ur wireguard/send.c QUICwireguard/send.c
 -	struct message_handshake_initiation packet;
 +	struct QUIC_message_handshake_initiation *QUIC_packet;
 +	struct message_handshake_initiation *packet;
-+	char send_memory[sizeof(*QUIC_packet) + sizeof(*packet)];
++	u8 send_memory[sizeof(*QUIC_packet) + sizeof(*packet)];
 +
 +	QUIC_packet = (struct QUIC_message_handshake_initiation *) send_memory;
 +	packet = (struct message_handshake_initiation *)(send_memory + sizeof(*QUIC_packet));
@@ -181,7 +183,7 @@ diff -ur wireguard/send.c QUICwireguard/send.c
 -	struct message_handshake_response packet;
 +	struct QUIC_message_handshake_response *QUIC_packet;
 +	struct message_handshake_response *packet;
-+	char send_memory[sizeof(*QUIC_packet) + sizeof(*packet)];
++	u8 send_memory[sizeof(*QUIC_packet) + sizeof(*packet)];
 +
 +	QUIC_packet = (struct QUIC_message_handshake_response *) send_memory;
 +	packet = (struct message_handshake_response *)(send_memory + sizeof(*QUIC_packet));
@@ -233,8 +235,8 @@ diff -ur wireguard/send.c QUICwireguard/send.c
  	}
  }
 diff -ur wireguard/socket.h QUICwireguard/socket.h
---- wireguard/socket.h	2024-12-15 17:35:02.842381370 +0300
-+++ QUICwireguard/socket.h	2024-12-15 17:34:48.275069845 +0300
+--- wireguard/socket.h	2024-12-15 19:06:21.542243707 +0300
++++ QUICwireguard/socket.h	2024-12-15 19:06:05.568246506 +0300
 @@ -11,6 +11,8 @@
  #include <linux/if_vlan.h>
  #include <linux/if_ether.h>
