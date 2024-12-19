@@ -1,6 +1,6 @@
 diff -ur wireguard/main.c QUICwireguard/main.c
---- wireguard/main.c	2024-12-18 22:15:10.185300128 +0300
-+++ QUICwireguard/main.c	2024-12-18 22:14:40.347355548 +0300
+--- wireguard/main.c	2024-12-20 01:47:07.241985774 +0300
++++ QUICwireguard/main.c	2024-12-20 01:46:49.177968925 +0300
 @@ -45,8 +45,9 @@
  	if (ret < 0)
  		goto err_netlink;
@@ -13,8 +13,8 @@ diff -ur wireguard/main.c QUICwireguard/main.c
  	return 0;
  
 diff -ur wireguard/Makefile QUICwireguard/Makefile
---- wireguard/Makefile	2024-12-18 22:15:10.181966653 +0300
-+++ QUICwireguard/Makefile	2024-12-18 22:14:40.347355548 +0300
+--- wireguard/Makefile	2024-12-20 01:47:07.241985774 +0300
++++ QUICwireguard/Makefile	2024-12-20 01:46:49.177968925 +0300
 @@ -15,3 +15,9 @@
  wireguard-y += cookie.o
  wireguard-y += netlink.o
@@ -26,14 +26,16 @@ diff -ur wireguard/Makefile QUICwireguard/Makefile
 +clean:
 +	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 diff -ur wireguard/messages.h QUICwireguard/messages.h
---- wireguard/messages.h	2024-12-18 22:15:10.185300128 +0300
-+++ QUICwireguard/messages.h	2024-12-18 22:14:40.347355548 +0300
-@@ -77,6 +77,16 @@
+--- wireguard/messages.h	2024-12-20 01:47:07.241985774 +0300
++++ QUICwireguard/messages.h	2024-12-20 01:46:49.177968925 +0300
+@@ -77,6 +77,18 @@
  	u8 mac2[COOKIE_LEN];
  };
  
++#define QUIC_FLAGS 0xC0
++
 +struct QUIC_message_handshake_initiation {
-+	u8 header_byte;
++	u8 flags;
 +	__be32 version;
 +	u8 DCID_len;
 +	u64 DCID;
@@ -45,12 +47,12 @@ diff -ur wireguard/messages.h QUICwireguard/messages.h
  struct message_handshake_initiation {
  	struct message_header header;
  	__le32 sender_index;
-@@ -86,6 +96,16 @@
+@@ -86,6 +98,16 @@
  	struct message_macs macs;
  };
  
 +struct QUIC_message_handshake_response {
-+	u8 header_byte;
++	u8 flags;
 +	__be32 version;
 +	u8 DCID_len;
 +	u8 SCID_len;
@@ -63,8 +65,8 @@ diff -ur wireguard/messages.h QUICwireguard/messages.h
  	struct message_header header;
  	__le32 sender_index;
 diff -ur wireguard/queueing.h QUICwireguard/queueing.h
---- wireguard/queueing.h	2024-12-18 22:15:10.185300128 +0300
-+++ QUICwireguard/queueing.h	2024-12-18 22:14:40.347355548 +0300
+--- wireguard/queueing.h	2024-12-20 01:47:07.241985774 +0300
++++ QUICwireguard/queueing.h	2024-12-20 01:46:49.177968925 +0300
 @@ -38,7 +38,7 @@
  /* send.c APIs: */
  void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
@@ -75,8 +77,8 @@ diff -ur wireguard/queueing.h QUICwireguard/queueing.h
  				     struct sk_buff *initiating_skb,
  				     __le32 sender_index);
 diff -ur wireguard/receive.c QUICwireguard/receive.c
---- wireguard/receive.c	2024-12-18 22:15:10.185300128 +0300
-+++ QUICwireguard/receive.c	2024-12-18 22:14:40.347355548 +0300
+--- wireguard/receive.c	2024-12-20 01:47:07.241985774 +0300
++++ QUICwireguard/receive.c	2024-12-20 01:46:49.177968925 +0300
 @@ -46,7 +46,7 @@
  
  static int prepare_skb_header(struct sk_buff *skb, struct wg_device *wg)
@@ -96,9 +98,9 @@ diff -ur wireguard/receive.c QUICwireguard/receive.c
 +			return -EINVAL;
 +		}
 +		if (unlikely(*skb->data > MESSAGE_DATA)) {
-+			QUIC_offset = sizeof(
-+				struct QUIC_message_handshake_initiation);
++			QUIC_offset = sizeof(struct QUIC_message_handshake_initiation);
 +			data_len -= QUIC_offset;
++			data_offset += QUIC_offset;
 +			if (unlikely(!pskb_may_pull(skb, QUIC_offset)))
 +				return -EINVAL;
 +			skb_pull(skb, QUIC_offset);
@@ -120,8 +122,8 @@ diff -ur wireguard/receive.c QUICwireguard/receive.c
  	}
  	case cpu_to_le32(MESSAGE_HANDSHAKE_RESPONSE): {
 diff -ur wireguard/send.c QUICwireguard/send.c
---- wireguard/send.c	2024-12-18 22:15:10.185300128 +0300
-+++ QUICwireguard/send.c	2024-12-18 22:14:40.347355548 +0300
+--- wireguard/send.c	2024-12-20 01:47:07.241985774 +0300
++++ QUICwireguard/send.c	2024-12-20 01:46:49.177968925 +0300
 @@ -20,7 +20,27 @@
  
  static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
@@ -135,7 +137,7 @@ diff -ur wireguard/send.c QUICwireguard/send.c
 +	packet = (struct message_handshake_initiation *)(send_memory + sizeof(*QUIC_packet));
 +
 +	if (be16_to_cpu(peer->endpoint.addr4.sin_port) == QUIC_PORT) {
-+		QUIC_packet->header_byte = 0xC0;
++		QUIC_packet->flags = QUIC_FLAGS;
 +
 +		QUIC_packet->version = cpu_to_be32(1);
 +
@@ -191,7 +193,7 @@ diff -ur wireguard/send.c QUICwireguard/send.c
 +	packet = (struct message_handshake_response *)(send_memory + sizeof(*QUIC_packet));
 +
 +	if (wg->incoming_port == QUIC_PORT) {
-+		QUIC_packet->header_byte = 0xC0;
++		QUIC_packet->flags = QUIC_FLAGS;
 +
 +		QUIC_packet->version = cpu_to_be32(1);
 +
@@ -237,8 +239,8 @@ diff -ur wireguard/send.c QUICwireguard/send.c
  	}
  }
 diff -ur wireguard/socket.h QUICwireguard/socket.h
---- wireguard/socket.h	2024-12-18 22:15:10.185300128 +0300
-+++ QUICwireguard/socket.h	2024-12-18 22:14:40.347355548 +0300
+--- wireguard/socket.h	2024-12-20 01:47:07.241985774 +0300
++++ QUICwireguard/socket.h	2024-12-20 01:46:49.177968925 +0300
 @@ -11,6 +11,8 @@
  #include <linux/if_vlan.h>
  #include <linux/if_ether.h>
