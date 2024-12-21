@@ -1,6 +1,6 @@
 diff -ur wireguard/main.c QUICwireguard/main.c
---- wireguard/main.c	2024-12-21 02:01:53.335817821 +0300
-+++ QUICwireguard/main.c	2024-12-21 02:01:37.215124228 +0300
+--- wireguard/main.c	2024-12-21 11:51:13.907422301 +0300
++++ QUICwireguard/main.c	2024-12-21 11:51:01.773598303 +0300
 @@ -45,8 +45,9 @@
  	if (ret < 0)
  		goto err_netlink;
@@ -13,8 +13,8 @@ diff -ur wireguard/main.c QUICwireguard/main.c
  	return 0;
  
 diff -ur wireguard/Makefile QUICwireguard/Makefile
---- wireguard/Makefile	2024-12-21 02:01:53.332484345 +0300
-+++ QUICwireguard/Makefile	2024-12-21 02:01:37.215124228 +0300
+--- wireguard/Makefile	2024-12-21 11:51:13.907422301 +0300
++++ QUICwireguard/Makefile	2024-12-21 11:51:01.773598303 +0300
 @@ -15,3 +15,9 @@
  wireguard-y += cookie.o
  wireguard-y += netlink.o
@@ -26,8 +26,8 @@ diff -ur wireguard/Makefile QUICwireguard/Makefile
 +clean:
 +	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 diff -ur wireguard/messages.h QUICwireguard/messages.h
---- wireguard/messages.h	2024-12-21 02:01:53.335817821 +0300
-+++ QUICwireguard/messages.h	2024-12-21 02:01:37.215124228 +0300
+--- wireguard/messages.h	2024-12-21 11:51:13.910755769 +0300
++++ QUICwireguard/messages.h	2024-12-21 11:51:01.773598303 +0300
 @@ -77,6 +77,36 @@
  	u8 mac2[COOKIE_LEN];
  };
@@ -66,8 +66,8 @@ diff -ur wireguard/messages.h QUICwireguard/messages.h
  	struct message_header header;
  	__le32 sender_index;
 diff -ur wireguard/queueing.h QUICwireguard/queueing.h
---- wireguard/queueing.h	2024-12-21 02:01:53.335817821 +0300
-+++ QUICwireguard/queueing.h	2024-12-21 02:01:37.215124228 +0300
+--- wireguard/queueing.h	2024-12-21 11:51:13.910755769 +0300
++++ QUICwireguard/queueing.h	2024-12-21 11:51:01.773598303 +0300
 @@ -38,7 +38,7 @@
  /* send.c APIs: */
  void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
@@ -78,8 +78,8 @@ diff -ur wireguard/queueing.h QUICwireguard/queueing.h
  				     struct sk_buff *initiating_skb,
  				     __le32 sender_index);
 diff -ur wireguard/receive.c QUICwireguard/receive.c
---- wireguard/receive.c	2024-12-21 02:01:53.335817821 +0300
-+++ QUICwireguard/receive.c	2024-12-21 02:09:39.882261962 +0300
+--- wireguard/receive.c	2024-12-21 11:51:13.910755769 +0300
++++ QUICwireguard/receive.c	2024-12-21 11:51:01.773598303 +0300
 @@ -46,7 +46,7 @@
  
  static int prepare_skb_header(struct sk_buff *skb, struct wg_device *wg)
@@ -124,9 +124,9 @@ diff -ur wireguard/receive.c QUICwireguard/receive.c
  	}
  	case cpu_to_le32(MESSAGE_HANDSHAKE_RESPONSE): {
 diff -ur wireguard/send.c QUICwireguard/send.c
---- wireguard/send.c	2024-12-21 02:01:53.335817821 +0300
-+++ QUICwireguard/send.c	2024-12-21 02:15:34.233721488 +0300
-@@ -20,7 +20,31 @@
+--- wireguard/send.c	2024-12-21 11:51:13.910755769 +0300
++++ QUICwireguard/send.c	2024-12-21 11:51:01.773598303 +0300
+@@ -20,7 +20,30 @@
  
  static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
  {
@@ -153,13 +153,12 @@ diff -ur wireguard/send.c QUICwireguard/send.c
 +
 +		QUIC_packet->token_len = 0;
 +
-+		QUIC_packet->data_len =
-+			cpu_to_be16(TWO_BYTE_DATA_LEN + sizeof(*packet) + 1);
++		QUIC_packet->data_len = cpu_to_be16(TWO_BYTE_DATA_LEN + sizeof(*packet));
 +	}
  
  	if (!wg_birthdate_has_expired(atomic64_read(&peer->last_sent_handshake),
  				      REKEY_TIMEOUT))
-@@ -31,14 +55,19 @@
+@@ -31,14 +54,19 @@
  			    peer->device->dev->name, peer->internal_id,
  			    &peer->endpoint.addr);
  
@@ -182,7 +181,7 @@ diff -ur wireguard/send.c QUICwireguard/send.c
  		wg_timers_handshake_initiated(peer);
  	}
  }
-@@ -82,17 +111,41 @@
+@@ -82,17 +110,40 @@
  	rcu_read_unlock_bh();
  }
  
@@ -212,8 +211,7 @@ diff -ur wireguard/send.c QUICwireguard/send.c
 +
 +		QUIC_packet->token_len = 0;
 +
-+		QUIC_packet->data_len =
-+			cpu_to_be16(TWO_BYTE_DATA_LEN + sizeof(*packet) + 1);
++		QUIC_packet->data_len = cpu_to_be16(TWO_BYTE_DATA_LEN + sizeof(*packet));
 +	}
  
  	atomic64_set(&peer->last_sent_handshake, ktime_get_coarse_boottime_ns());
@@ -228,7 +226,7 @@ diff -ur wireguard/send.c QUICwireguard/send.c
  		if (wg_noise_handshake_begin_session(&peer->handshake,
  						     &peer->keypairs)) {
  			wg_timers_session_derived(peer);
-@@ -100,9 +153,15 @@
+@@ -100,9 +151,15 @@
  			wg_timers_any_authenticated_packet_sent(peer);
  			atomic64_set(&peer->last_sent_handshake,
  				     ktime_get_coarse_boottime_ns());
