@@ -8,16 +8,18 @@ if [ -f /usr/bin/pacman ]; then
 	sudo pacman -S make wget base-devel linux-headers --noconfirm
 fi
 
-if [ ! -d linux ]; then
-	git clone https://github.com/torvalds/linux.git
+KERNEL_VERSION=$(uname -r)
+KERNEL_VERSION_GIT=$(echo $KERNEL_VERSION | sed -r 's/^([0-9]+\.[0-9]+).*/\1/g')
+
+if [ ! -f v$KERNEL_VERSION_GIT.tar.gz ]; then
+	wget https://github.com/torvalds/linux/archive/refs/tags/v$KERNEL_VERSION_GIT.tar.gz
 fi
 
-KERNEL_VERSION=$(uname -r)
-KERNEL_VERSION_GIT=v$(echo $KERNEL_VERSION | sed -r 's/^([0-9]+\.[0-9]+).*/\1/g')
+if [ ! -d linux-$KERNEL_VERSION_GIT ]; then
+	tar -xf v$KERNEL_VERSION_GIT.tar.gz
+fi
 
-cd linux
-
-git checkout $KERNEL_VERSION_GIT
+cd linux-$KERNEL_VERSION_GIT
 
 WIREGUARD_FOLDER=$(find . -type d | grep "/drivers/net/wireguard" | head -n 1)
 
