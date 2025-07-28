@@ -3,23 +3,23 @@
 pwd_var=$(pwd)
 
 if [ -z "$1" ]; then
-	echo "Argument 1: Empty router ssh name"
-	exit 1
+    echo "Argument 1: Empty router ssh name"
+    exit 1
 fi
 
 if [ -f /usr/bin/apt ]; then
-	sudo apt update && sudo apt-get install -y make unzip bzip2 build-essential libncurses5-dev libncursesw5-dev
+    sudo apt update && sudo apt-get install -y make unzip bzip2 build-essential libncurses5-dev libncursesw5-dev
 fi
 
 if [ -f /usr/bin/pacman ]; then
-	sudo pacman -S make wget rsync base-devel unzip python3 python-distutils-extra --noconfirm
+    sudo pacman -S make wget rsync base-devel unzip python3 python-distutils-extra --noconfirm
 fi
 
 ROUTER_NAME=$1
 
 if ! ssh -o StrictHostKeyChecking=no $ROUTER_NAME cat /etc/os-release; then
-	echo "SSH connection or remote command failed"
-	exit 1
+    echo "SSH connection or remote command failed"
+    exit 1
 fi
 
 ROUTER_KERNEL="$(ssh $ROUTER_NAME uname -r)"
@@ -29,7 +29,7 @@ BOARD=$(echo "$ROUTER_OS_RELEASE" | grep OPENWRT_BOARD | head -n 1 | sed -r 's/.
 CONFIGBUILDINFO_URL="https://downloads.openwrt.org/releases/$VERSION/targets/$BOARD/config.buildinfo"
 
 if [ ! -d $pwd_var/openwrt ]; then
-	git clone https://git.openwrt.org/openwrt/openwrt.git
+    git clone https://git.openwrt.org/openwrt/openwrt.git
 fi
 
 cd $pwd_var/openwrt
@@ -54,8 +54,8 @@ cp $pwd_var/QUICWireGuard.patch $WIREGUARD_FOLDER/QUICWireGuard.patch
 cd $WIREGUARD_FOLDER
 
 if [ ! -f QUICWireGuard_tmp ]; then
-	patch -p1 <QUICWireGuard.patch
-	touch QUICWireGuard_tmp
+    patch -p1 <QUICWireGuard.patch
+    touch QUICWireGuard_tmp
 fi
 
 cd $pwd_var/openwrt
@@ -63,6 +63,6 @@ cd $pwd_var/openwrt
 make -j$(nproc) target/linux/compile
 
 if [ -f $WIREGUARD_FOLDER/wireguard.ko ]; then
-	scp -O $WIREGUARD_FOLDER/wireguard.ko $ROUTER_NAME:/lib/modules/$ROUTER_KERNEL/
-	echo "Command succeeded"
+    scp -O $WIREGUARD_FOLDER/wireguard.ko $ROUTER_NAME:/lib/modules/$ROUTER_KERNEL/
+    echo "Command succeeded"
 fi
