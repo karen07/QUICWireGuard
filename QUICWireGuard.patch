@@ -1,0 +1,246 @@
+diff -ur wireguard/main.c QUICwireguard/main.c
+--- wireguard/main.c	2024-12-21 11:51:13.907422301 +0300
++++ QUICwireguard/main.c	2024-12-21 11:51:01.773598303 +0300
+@@ -45,8 +45,9 @@
+ 	if (ret < 0)
+ 		goto err_netlink;
+ 
+-	pr_info("WireGuard " WIREGUARD_VERSION " loaded. See www.wireguard.com for information.\n");
++	pr_info("QUICWireGuard " WIREGUARD_VERSION " loaded. See https://github.com/karen07/QUICWireGuard for information.\n");
+ 	pr_info("Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n");
++	pr_info("Copyright (C) 2024 Karen.\n");
+ 
+ 	return 0;
+ 
+diff -ur wireguard/Makefile QUICwireguard/Makefile
+--- wireguard/Makefile	2024-12-21 11:51:13.907422301 +0300
++++ QUICwireguard/Makefile	2024-12-21 11:51:01.773598303 +0300
+@@ -15,3 +15,9 @@
+ wireguard-y += cookie.o
+ wireguard-y += netlink.o
+ obj-$(CONFIG_WIREGUARD) := wireguard.o
++
++all:
++	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
++
++clean:
++	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+diff -ur wireguard/messages.h QUICwireguard/messages.h
+--- wireguard/messages.h	2024-12-21 11:51:13.910755769 +0300
++++ QUICwireguard/messages.h	2024-12-21 11:51:01.773598303 +0300
+@@ -77,6 +77,36 @@
+ 	u8 mac2[COOKIE_LEN];
+ };
+ 
++#define QUIC_PORT 443
++
++#define QUIC_FLAGS 0xC0
++#define TWO_BYTE_DATA_LEN 0x4000
++
++struct QUIC_CID_initiation {
++	u8 DCID_len;
++	u64 DCID;
++	u8 SCID_len;
++} __attribute__((packed));
++
++struct QUIC_CID_response {
++	u8 DCID_len;
++	u8 SCID_len;
++	u64 SCID;
++} __attribute__((packed));
++
++union QUIC_CID_initiation_response {
++	struct QUIC_CID_initiation initiation;
++	struct QUIC_CID_response response;
++};
++
++struct QUIC_message_handshake {
++	u8 flags;
++	__be32 version;
++	union QUIC_CID_initiation_response CID;
++	u8 token_len;
++	__be16 data_len;
++} __attribute__((packed));
++
+ struct message_handshake_initiation {
+ 	struct message_header header;
+ 	__le32 sender_index;
+diff -ur wireguard/queueing.h QUICwireguard/queueing.h
+--- wireguard/queueing.h	2024-12-21 11:51:13.910755769 +0300
++++ QUICwireguard/queueing.h	2024-12-21 11:51:01.773598303 +0300
+@@ -38,7 +38,7 @@
+ /* send.c APIs: */
+ void wg_packet_send_queued_handshake_initiation(struct wg_peer *peer,
+ 						bool is_retry);
+-void wg_packet_send_handshake_response(struct wg_peer *peer);
++void wg_packet_send_handshake_response(struct wg_device *wg, struct wg_peer *peer);
+ void wg_packet_send_handshake_cookie(struct wg_device *wg,
+ 				     struct sk_buff *initiating_skb,
+ 				     __le32 sender_index);
+diff -ur wireguard/receive.c QUICwireguard/receive.c
+--- wireguard/receive.c	2024-12-21 11:51:13.910755769 +0300
++++ QUICwireguard/receive.c	2024-12-21 11:51:01.773598303 +0300
+@@ -46,7 +46,7 @@
+ 
+ static int prepare_skb_header(struct sk_buff *skb, struct wg_device *wg)
+ {
+-	size_t data_offset, data_len, header_len;
++	size_t data_offset, data_len, header_len, QUIC_offset;
+ 	struct udphdr *udp;
+ 
+ 	if (unlikely(!wg_check_packet_protocol(skb) ||
+@@ -79,6 +79,24 @@
+ 	if (unlikely(skb->len != data_len))
+ 		/* Final len does not agree with calculated len */
+ 		return -EINVAL;
++	if ((be16_to_cpu(udp->source) == QUIC_PORT) ||
++	    (be16_to_cpu(udp->dest) == QUIC_PORT)) {
++		if (unlikely(skb->len < sizeof(*skb->data))) {
++			return -EINVAL;
++		}
++		if (unlikely(*skb->data > MESSAGE_DATA)) {
++			QUIC_offset = sizeof(struct QUIC_message_handshake);
++			data_len -= QUIC_offset;
++			data_offset += QUIC_offset;
++			if (unlikely(!pskb_may_pull(skb,
++						QUIC_offset + sizeof(struct message_header))))
++				return -EINVAL;
++			skb_pull(skb, QUIC_offset);
++			if (unlikely(skb->len != data_len))
++				/* Final len does not agree with calculated len */
++				return -EINVAL;
++		}
++	}
+ 	header_len = validate_header_len(skb);
+ 	if (unlikely(!header_len))
+ 		return -EINVAL;
+@@ -151,7 +169,7 @@
+ 		net_dbg_ratelimited("%s: Receiving handshake initiation from peer %llu (%pISpfsc)\n",
+ 				    wg->dev->name, peer->internal_id,
+ 				    &peer->endpoint.addr);
+-		wg_packet_send_handshake_response(peer);
++		wg_packet_send_handshake_response(wg, peer);
+ 		break;
+ 	}
+ 	case cpu_to_le32(MESSAGE_HANDSHAKE_RESPONSE): {
+diff -ur wireguard/send.c QUICwireguard/send.c
+--- wireguard/send.c	2024-12-21 11:51:13.910755769 +0300
++++ QUICwireguard/send.c	2024-12-21 11:51:01.773598303 +0300
+@@ -20,7 +20,30 @@
+ 
+ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
+ {
+-	struct message_handshake_initiation packet;
++	struct QUIC_message_handshake *QUIC_packet;
++	struct message_handshake_initiation *packet;
++	u8 send_memory[sizeof(*QUIC_packet) + sizeof(*packet)];
++	u8 DCID_len;
++
++	QUIC_packet = (struct QUIC_message_handshake *)send_memory;
++	packet = (struct message_handshake_initiation *)(send_memory +
++							 sizeof(*QUIC_packet));
++
++	if (be16_to_cpu(peer->endpoint.addr4.sin_port) == QUIC_PORT) {
++		QUIC_packet->flags = QUIC_FLAGS;
++
++		QUIC_packet->version = cpu_to_be32(1);
++
++		DCID_len = sizeof(QUIC_packet->CID.initiation.DCID);
++		QUIC_packet->CID.initiation.DCID_len = DCID_len;
++		get_random_bytes(&QUIC_packet->CID.initiation.DCID, DCID_len);
++
++		QUIC_packet->CID.initiation.SCID_len = 0;
++
++		QUIC_packet->token_len = 0;
++
++		QUIC_packet->data_len = cpu_to_be16(TWO_BYTE_DATA_LEN + sizeof(*packet));
++	}
+ 
+ 	if (!wg_birthdate_has_expired(atomic64_read(&peer->last_sent_handshake),
+ 				      REKEY_TIMEOUT))
+@@ -31,14 +54,19 @@
+ 			    peer->device->dev->name, peer->internal_id,
+ 			    &peer->endpoint.addr);
+ 
+-	if (wg_noise_handshake_create_initiation(&packet, &peer->handshake)) {
+-		wg_cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
++	if (wg_noise_handshake_create_initiation(packet, &peer->handshake)) {
++		wg_cookie_add_mac_to_packet(packet, sizeof(*packet), peer);
+ 		wg_timers_any_authenticated_packet_traversal(peer);
+ 		wg_timers_any_authenticated_packet_sent(peer);
+ 		atomic64_set(&peer->last_sent_handshake,
+ 			     ktime_get_coarse_boottime_ns());
+-		wg_socket_send_buffer_to_peer(peer, &packet, sizeof(packet),
++		if (be16_to_cpu(peer->endpoint.addr4.sin_port) == QUIC_PORT) {
++			wg_socket_send_buffer_to_peer(peer, &send_memory, sizeof(send_memory),
+ 					      HANDSHAKE_DSCP);
++		} else {
++			wg_socket_send_buffer_to_peer(peer, packet, sizeof(*packet),
++					      HANDSHAKE_DSCP);
++		}
+ 		wg_timers_handshake_initiated(peer);
+ 	}
+ }
+@@ -82,17 +110,40 @@
+ 	rcu_read_unlock_bh();
+ }
+ 
+-void wg_packet_send_handshake_response(struct wg_peer *peer)
++void wg_packet_send_handshake_response(struct wg_device *wg, struct wg_peer *peer)
+ {
+-	struct message_handshake_response packet;
++	struct QUIC_message_handshake *QUIC_packet;
++	struct message_handshake_response *packet;
++	u8 send_memory[sizeof(*QUIC_packet) + sizeof(*packet)];
++	u8 SCID_len;
++
++	QUIC_packet = (struct QUIC_message_handshake *)send_memory;
++	packet = (struct message_handshake_response *)(send_memory +
++						       sizeof(*QUIC_packet));
++
++	if (wg->incoming_port == QUIC_PORT) {
++		QUIC_packet->flags = QUIC_FLAGS;
++
++		QUIC_packet->version = cpu_to_be32(1);
++
++		QUIC_packet->CID.response.DCID_len = 0;
++
++		SCID_len = sizeof(QUIC_packet->CID.response.SCID);
++		QUIC_packet->CID.response.SCID_len = SCID_len;
++		get_random_bytes(&QUIC_packet->CID.response.SCID, SCID_len);
++
++		QUIC_packet->token_len = 0;
++
++		QUIC_packet->data_len = cpu_to_be16(TWO_BYTE_DATA_LEN + sizeof(*packet));
++	}
+ 
+ 	atomic64_set(&peer->last_sent_handshake, ktime_get_coarse_boottime_ns());
+ 	net_dbg_ratelimited("%s: Sending handshake response to peer %llu (%pISpfsc)\n",
+ 			    peer->device->dev->name, peer->internal_id,
+ 			    &peer->endpoint.addr);
+ 
+-	if (wg_noise_handshake_create_response(&packet, &peer->handshake)) {
+-		wg_cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
++	if (wg_noise_handshake_create_response(packet, &peer->handshake)) {
++		wg_cookie_add_mac_to_packet(packet, sizeof(*packet), peer);
+ 		if (wg_noise_handshake_begin_session(&peer->handshake,
+ 						     &peer->keypairs)) {
+ 			wg_timers_session_derived(peer);
+@@ -100,9 +151,15 @@
+ 			wg_timers_any_authenticated_packet_sent(peer);
+ 			atomic64_set(&peer->last_sent_handshake,
+ 				     ktime_get_coarse_boottime_ns());
+-			wg_socket_send_buffer_to_peer(peer, &packet,
+-						      sizeof(packet),
++			if (wg->incoming_port == QUIC_PORT) {
++				wg_socket_send_buffer_to_peer(peer, &send_memory,
++						      sizeof(send_memory),
++						      HANDSHAKE_DSCP);
++			} else {
++				wg_socket_send_buffer_to_peer(peer, packet,
++						      sizeof(*packet),
+ 						      HANDSHAKE_DSCP);
++			}
+ 		}
+ 	}
+ }

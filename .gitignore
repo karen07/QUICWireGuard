@@ -1,0 +1,4 @@
+build*
+linux-*
+*.tar.gz
+*.ko
