@@ -60,7 +60,7 @@ build_dir="$pwd_var/build_${1}_${VERSION}"
 build_name="build_${1}_${VERSION}"
 
 if [ ! -d "$build_dir" ]; then
-    git clone https://git.openwrt.org/openwrt/openwrt.git "$build_name"
+    git clone https://github.com/openwrt/openwrt.git "$build_name"
 fi
 
 cd "$build_dir" || exit
