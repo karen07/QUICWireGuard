@@ -69,7 +69,7 @@ if ! git checkout "v$VERSION"; then
     exit 1
 fi
 
-if ! wget "$CONFIGBUILDINFO_URL" -O .config; then
+if ! wget -q "$CONFIGBUILDINFO_URL" -O .config; then
     echo "wget failed: $CONFIGBUILDINFO_URL"
     exit 1
 fi

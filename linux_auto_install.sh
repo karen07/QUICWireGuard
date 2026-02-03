@@ -18,7 +18,7 @@ URL_BASE="https://github.com/torvalds/linux/archive/refs/tags"
 URL_TARBALL="$URL_BASE/$TARBALL"
 
 if [ ! -f "$TARBALL" ]; then
-    wget "$URL_TARBALL"
+    wget -q "$URL_TARBALL"
 fi
 
 if [ ! -d "$SRC_DIR" ]; then
