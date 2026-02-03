@@ -57,10 +57,9 @@ OPENWRT_DL="https://downloads.openwrt.org/releases"
 CONFIGBUILDINFO_URL="$OPENWRT_DL/$VERSION/targets/$BOARD/config.buildinfo"
 
 build_dir="$pwd_var/build_${1}_${VERSION}"
-build_name="build_${1}_${VERSION}"
 
 if [ ! -d "$build_dir" ]; then
-    git clone https://github.com/openwrt/openwrt.git "$build_name"
+    git clone https://github.com/openwrt/openwrt.git "$build_dir"
 fi
 
 cd "$build_dir" || exit
@@ -74,6 +73,8 @@ if ! wget "$CONFIGBUILDINFO_URL" -O .config; then
     echo "wget failed: $CONFIGBUILDINFO_URL"
     exit 1
 fi
+
+sed -i -E 's#https://git\.openwrt\.org/[^/]+/#https://github.com/openwrt/#g' feeds.conf.default
 
 ./scripts/feeds update -a
 ./scripts/feeds install -a
