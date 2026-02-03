@@ -45,13 +45,13 @@ ROUTER_OS_RELEASE="$(ssh "$ROUTER_NAME" cat /etc/os-release)"
 
 if [ -z "$2" ]; then
     VERSION=$(echo "$ROUTER_OS_RELEASE" \
-        | grep VERSION | head -n 1 | cut -d '"' -f2)
+        | grep VERSION | head -n 1 | cut -d'"' -f2)
 else
     VERSION="$2"
 fi
 
 BOARD=$(echo "$ROUTER_OS_RELEASE" \
-    | grep OPENWRT_BOARD | head -n 1 | cut -d '"' -f2)
+    | grep OPENWRT_BOARD | head -n 1 | cut -d'"' -f2)
 
 OPENWRT_DL="https://downloads.openwrt.org/releases"
 CONFIGBUILDINFO_URL="$OPENWRT_DL/$VERSION/targets/$BOARD/config.buildinfo"
