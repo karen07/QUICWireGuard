@@ -1,4 +1,9 @@
-build*
-linux-*
-*.tar.gz
+# Downloaded Linux sources and archives
+/linux-[0-9]*/
+/v[0-9]*.tar.gz
+
+# OpenWrt build directories
+/build_*/
+
+# Built kernel modules
 *.ko
