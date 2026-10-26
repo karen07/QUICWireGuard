@@ -1,22 +1,33 @@
 # QUICWireGuard
 
-QUICWireGuard is a legacy Linux kernel patch that makes the initial WireGuard handshake resemble QUIC UDP traffic on port 443.
-
-The patch does not implement QUIC and does not carry normal WireGuard data packets through a QUIC connection. It only prepends and removes a small QUIC-like header around WireGuard Handshake Initiation and Handshake Response packets while leaving the WireGuard protocol, Noise handshake, and cryptography unchanged.
-
-The project was created in 2024 as a deliberately small traffic-obfuscation experiment. By 2026 its threat model is outdated: hiding only the fixed handshake signature is not enough against traffic classification that can use packet sizes, timing, direction, and other session-level features.
-
-The repository is therefore kept for history, existing deployments, research, and as a compact example of modifying WireGuard directly in the Linux kernel. New deployments should use maintained alternatives such as AmneziaWG instead.
+QUICWireGuard is a legacy Linux kernel patch that makes the initial WireGuard handshake
+resemble QUIC UDP traffic on port 443. It does not implement QUIC or carry WireGuard data
+over a QUIC connection.
 
 ## Описание
 
-QUICWireGuard - устаревший патч ядра Linux, который делает начальное рукопожатие WireGuard похожим на трафик QUIC по UDP на порту 443.
+QUICWireGuard - устаревший патч ядра Linux, который делает начальное рукопожатие WireGuard
+похожим на QUIC-трафик по UDP-порту 443. Он не реализует протокол QUIC и не передаёт данные
+WireGuard через QUIC-соединение.
 
-Патч не реализует QUIC и не передает обычные пакеты данных WireGuard через соединение QUIC. Он только добавляет и удаляет небольшой QUIC-подобный заголовок вокруг пакетов WireGuard Handshake Initiation и Handshake Response, оставляя без изменений сам протокол WireGuard, рукопожатие Noise и криптографию.
+Патч лишь добавляет и удаляет небольшой QUIC-подобный заголовок вокруг пакетов WireGuard
+Handshake Initiation и Handshake Response. Протокол WireGuard, рукопожатие Noise и криптография
+не меняются.
 
 Проект был создан в 2024 году как намеренно небольшой эксперимент по маскировке трафика. К 2026 году его модель угроз устарела: скрытия только фиксированной сигнатуры рукопожатия недостаточно против классификации трафика, которая может учитывать размеры пакетов, временные характеристики, направление и другие признаки всей сессии.
 
 Поэтому репозиторий сохраняется для истории, существующих установок, исследований и как компактный пример модификации WireGuard непосредственно в ядре Linux. Для новых установок следует использовать поддерживаемые альтернативы, например AmneziaWG.
+
+## Содержание
+
+- [Статус проекта](#%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D0%B0)
+- [Мотивация](#%D0%BC%D0%BE%D1%82%D0%B8%D0%B2%D0%B0%D1%86%D0%B8%D1%8F)
+- [Как это работает](#%D0%BA%D0%B0%D0%BA-%D1%8D%D1%82%D0%BE-%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D0%B5%D1%82)
+- [Это не настоящий QUIC](#%D1%8D%D1%82%D0%BE-%D0%BD%D0%B5-%D0%BD%D0%B0%D1%81%D1%82%D0%BE%D1%8F%D1%89%D0%B8%D0%B9-quic)
+- [Почему этот подход устарел к 2026 году](#%D0%BF%D0%BE%D1%87%D0%B5%D0%BC%D1%83-%D1%8D%D1%82%D0%BE%D1%82-%D0%BF%D0%BE%D0%B4%D1%85%D0%BE%D0%B4-%D1%83%D1%81%D1%82%D0%B0%D1%80%D0%B5%D0%BB-%D0%BA-2026-%D0%B3%D0%BE%D0%B4%D1%83)
+- [Современные альтернативы](#%D1%81%D0%BE%D0%B2%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D0%BD%D1%8B%D0%B5-%D0%B0%D0%BB%D1%8C%D1%82%D0%B5%D1%80%D0%BD%D0%B0%D1%82%D0%B8%D0%B2%D1%8B)
+- [Статья](#%D1%81%D1%82%D0%B0%D1%82%D1%8C%D1%8F)
+- [Лицензия](#%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F)
 
 ## Статус проекта
 
