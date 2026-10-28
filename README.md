@@ -4,11 +4,11 @@ QUICWireGuard is a legacy Linux kernel patch that makes the initial WireGuard ha
 resemble QUIC UDP traffic on port 443. It does not implement QUIC or carry WireGuard data
 over a QUIC connection.
 
-## Описание
-
 QUICWireGuard - устаревший патч ядра Linux, который делает начальное рукопожатие WireGuard
 похожим на QUIC-трафик по UDP-порту 443. Он не реализует протокол QUIC и не передаёт данные
 WireGuard через QUIC-соединение.
+
+## Описание
 
 Патч лишь добавляет и удаляет небольшой QUIC-подобный заголовок вокруг пакетов WireGuard
 Handshake Initiation и Handshake Response. Протокол WireGuard, рукопожатие Noise и криптография
@@ -20,14 +20,39 @@ Handshake Initiation и Handshake Response. Протокол WireGuard, руко
 
 ## Содержание
 
+- [Разработка и проверка изменений](#%D1%80%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0-%D0%B8-%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0-%D0%B8%D0%B7%D0%BC%D0%B5%D0%BD%D0%B5%D0%BD%D0%B8%D0%B9)
 - [Статус проекта](#%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D0%B0)
 - [Мотивация](#%D0%BC%D0%BE%D1%82%D0%B8%D0%B2%D0%B0%D1%86%D0%B8%D1%8F)
 - [Как это работает](#%D0%BA%D0%B0%D0%BA-%D1%8D%D1%82%D0%BE-%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D0%B5%D1%82)
 - [Это не настоящий QUIC](#%D1%8D%D1%82%D0%BE-%D0%BD%D0%B5-%D0%BD%D0%B0%D1%81%D1%82%D0%BE%D1%8F%D1%89%D0%B8%D0%B9-quic)
 - [Почему этот подход устарел к 2026 году](#%D0%BF%D0%BE%D1%87%D0%B5%D0%BC%D1%83-%D1%8D%D1%82%D0%BE%D1%82-%D0%BF%D0%BE%D0%B4%D1%85%D0%BE%D0%B4-%D1%83%D1%81%D1%82%D0%B0%D1%80%D0%B5%D0%BB-%D0%BA-2026-%D0%B3%D0%BE%D0%B4%D1%83)
 - [Современные альтернативы](#%D1%81%D0%BE%D0%B2%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D0%BD%D1%8B%D0%B5-%D0%B0%D0%BB%D1%8C%D1%82%D0%B5%D1%80%D0%BD%D0%B0%D1%82%D0%B8%D0%B2%D1%8B)
+  - [Amnezia](#amnezia)
+  - [AmneziaWG для OpenWrt](#amneziawg-%D0%B4%D0%BB%D1%8F-openwrt)
+  - [OpenWrt Mesh Builder](#openwrt-mesh-builder)
 - [Статья](#%D1%81%D1%82%D0%B0%D1%82%D1%8C%D1%8F)
 - [Лицензия](#%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F)
+
+## Разработка и проверка изменений
+
+**Основные точки изменения:**
+
+- `QUICWireGuard.patch` - изменения реализации рукопожатия WireGuard в ядре;
+- `linux-auto-install.sh` - применение изменений в Linux;
+- `openwrt-auto-install.sh` - применение изменений в OpenWrt.
+
+**Проверка изменений:** Это исторический патч, а не реализация QUIC. При изменениях сверяйте целевую версию исходников ядра и соответствующие пути в патче и установочных скриптах. Без проверки на целевой версии ядра нельзя утверждать, что патч применится и соберётся.
+
+**Типовые изменения:**
+
+- Формат QUIC-подобного заголовка: сверяйте изменения в `messages.h`,
+  `send.c` и `receive.c` внутри `QUICWireGuard.patch` как единый протокол.
+- Применение патча: изменения путей и зависимостей согласуйте с обоими
+  установочными скриптами, а не только с содержимым патча.
+
+**Инвариант:** Патч оборачивает только сообщения начального рукопожатия при
+использовании UDP-порта 443; он не создаёт QUIC-соединение и не заменяет
+криптографию WireGuard.
 
 ## Статус проекта
 
@@ -267,6 +292,4 @@ https://github.com/karen07/openwrt-mesh-builder
 
 ## Лицензия
 
-GNU Affero General Public License v3.0.
-
-See [LICENSE](LICENSE).
+Проект распространяется под лицензией GNU Affero General Public License v3.0. Подробности см. в файле [LICENSE](LICENSE).
